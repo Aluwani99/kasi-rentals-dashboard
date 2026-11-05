@@ -20,6 +20,10 @@ The interface opens in a sample-data demo when Supabase environment variables ar
 
 Never put a Supabase `service_role` key in a `VITE_` variable or browser code. The WhatsApp bot must use a server-side secret for writes to conversations and messages; the dashboard only receives authenticated read access to those tables. Configure the bot with the same project URL and server-only credentials. Active properties can be read without authentication so the bot can look up listings.
 
+## Deploy to GitHub Pages
+
+The `Deploy dashboard to GitHub Pages` workflow builds and deploys the dashboard when changes are pushed to `main`, or when started manually. In the repository's **Settings → Secrets and variables → Actions → Variables**, define `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` using your Supabase project URL and public anon/publishable key. These must be Actions variables, not secrets; the workflow fails before building if either is missing so a demo-only dashboard is not deployed. Set GitHub Pages' build and deployment source to **GitHub Actions**.
+
 ## Authentication and roles
 
 Email/password registration is enabled through Supabase Auth. New profiles are created by a database trigger. Users can register as an `agent` or `owner`; both roles can create, update, and delete their own properties and associated listing photos. Role changes are blocked from the user-facing profile update path and should be handled only by a trusted administrator.
