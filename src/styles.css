@@ -77,6 +77,20 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .demo-pill span { width: 5px; height: 5px; border-radius: 50%; background: #d99b4f; }
 .notification-btn { position: relative; }
 .notification-btn i { position: absolute; width: 6px; height: 6px; background: #e39b69; border: 1px solid white; border-radius: 50%; top: 5px; right: 4px; }
+.notification-popover-wrap { position: relative; }
+.notification-popover { position: absolute; z-index: 20; top: calc(100% + 13px); right: -44px; width: min(360px, calc(100vw - 28px)); max-height: min(440px, calc(100vh - 100px)); overflow-y: auto; background: white; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 12px 35px #17241b24; }
+.notification-popover-heading { position: sticky; top: 0; display: flex; justify-content: space-between; align-items: center; padding: 14px 15px; background: white; border-bottom: 1px solid var(--line); }
+.notification-popover-heading b { font-size: 12px; }
+.notification-popover-heading span, .notification-popover li small { color: #92988f; font-size: 9px; }
+.notification-popover ul { margin: 0; padding: 0; list-style: none; }
+.notification-popover li { display: flex; align-items: flex-start; gap: 10px; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid #f0f1ed; }
+.notification-popover li.unread { background: #f7faf6; }
+.notification-popover li b { display: block; font-size: 10px; color: #344237; }
+.notification-popover li p { margin: 4px 0; color: #70796f; font-size: 10px; line-height: 1.45; }
+.notification-popover li small { display: block; }
+.notification-popover li button, .auth-secondary-action { flex-shrink: 0; border: 0; background: transparent; padding: 4px 0; color: #376749; font-size: 9px; font-weight: 600; }
+.notification-popover li button:hover, .auth-secondary-action:hover { color: #184a34; text-decoration: underline; }
+.notifications-empty { margin: 0; padding: 22px 15px; color: #92988f; text-align: center; font-size: 10px; }
 .topbar-avatar { width: 30px; height: 30px; }
 .page-wrap { max-width: 1320px; margin: 0 auto; padding: 36px 43px 31px; }
 .welcome-row, .page-heading-row { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; margin-bottom: 24px; }
@@ -370,6 +384,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .role-picker button.selected { color: #356846; background: #f0f6ef; border-color: #a9c5a9; }
 .auth-submit { height: 40px; width: 100%; margin-top: 3px; }
 .auth-error { display: flex; gap: 7px; align-items: flex-start; padding: 9px; border-radius: 6px; background: #fff0ed; color: #a84b3e; font-size: 9px; line-height: 1.45; }
+.auth-message { padding: 9px; border-radius: 6px; background: #eef6ee; color: #376749; font-size: 9px; line-height: 1.45; }
+.otp-help { color: #92988f; font-size: 9px; line-height: 1.5; margin-top: -6px; }
+.auth-secondary-action { justify-self: center; padding: 2px 0; font-size: 9px; }
+.auth-secondary-action:disabled { cursor: wait; opacity: .65; }
 .auth-secure { display: flex; align-items: center; justify-content: center; gap: 5px; margin-top: 16px; color: #a3aaa1; font-size: 8px; }
 .auth-secure svg { color: #739574; }
 .demo-link { width: 100%; border: 0; background: transparent; margin-top: 20px; color: #64816a; font-size: 9px; display: flex; justify-content: center; align-items: center; gap: 5px; }

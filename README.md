@@ -15,7 +15,7 @@ The interface opens in a sample-data demo when Supabase environment variables ar
 1. Install Node.js 20 or newer.
 2. Run `npm install`.
 3. Copy `.env.example` to `.env.local` and fill in the Supabase project URL and public anon/publishable key.
-4. Apply `supabase/migrations/202611050001_initial_schema.sql` in the Supabase SQL Editor (or with the Supabase CLI).
+4. Apply the SQL migrations in `supabase/migrations` in filename order, including the initial schema and the notifications migration (or use the Supabase CLI).
 5. Run `npm run dev`.
 
 Never put a Supabase `service_role` key in a `VITE_` variable or browser code. The WhatsApp bot must use a server-side secret for writes to conversations and messages; the dashboard only receives authenticated read access to those tables. Configure the bot with the same project URL and server-only credentials. Active properties can be read without authentication so the bot can look up listings.
@@ -26,7 +26,7 @@ The `Deploy dashboard to GitHub Pages` workflow builds and deploys the dashboard
 
 ## Authentication and roles
 
-Email/password registration is enabled through Supabase Auth. New profiles are created by a database trigger. Users can register as an `agent` or `owner`; both roles can create, update, and delete their own properties and associated listing photos. Role changes are blocked from the user-facing profile update path and should be handled only by a trusted administrator.
+Email/password registration is enabled through Supabase Auth, with email verification using a one-time code before a new account can sign in. Keep Supabase Auth email confirmation enabled. In the Supabase Auth signup confirmation email template, use `{{ .Token }}` (not `{{ .ConfirmationURL }}`) so Supabase sends a verification code rather than a confirmation link. Supabase Auth generates and verifies the code; the dashboard never stores it. New profiles are created by a database trigger. Users can register as an `agent` or `owner`; both roles can create, update, and delete their own properties and associated listing photos. Role changes are blocked from the user-facing profile update path and should be handled only by a trusted administrator.
 
 Set Supabase Auth email confirmation and password policies to suit your deployment. For production, configure allowed redirect URLs and a custom SMTP provider.
 
@@ -39,6 +39,7 @@ The migration creates the shared tables:
 - `property_images(id, property_id, storage_path, caption, sort_order)`
 - `conversations(id, phone_number, selected_location, state, last_message_at)`
 - `messages(id, conversation_id, direction, body, provider_message_id, media_url, created_at)`
+- `notifications(id, user_id, type, title, body, related_message_id, read_at, created_at)`
 
 The assistant should query only `properties.status = 'active'`, ordered/filtered by location and availability. Store each incoming/outgoing WhatsApp message in `messages` and upsert conversations by unique `phone_number`. Use the bucket `property-images`; listing photos are stored beneath a first-level folder containing their property UUID. The bot may use a server-side Supabase service role, which bypasses RLS; keep it secret, validate webhook signatures, and never expose it in this dashboard.
 
@@ -47,6 +48,7 @@ The assistant should query only `properties.status = 'active'`, ordered/filtered
 - RLS scopes property mutations and photo operations to the authenticated creator.
 - Anonymous reads can see only active listings and their image metadata. The private Storage bucket issues signed URLs only for photos belonging to active listings or the authenticated user’s own listings.
 - Authenticated dashboard users can read conversations and messages; the browser has no policies to write them.
+- Authenticated users can read and mark only their own in-app notifications as read. A database trigger creates notifications for dashboard profiles when an inbound WhatsApp message is inserted; it does not include message contents or email verification codes.
 - `property-images` accepts JPEG, PNG, and WebP files up to 10 MB.
 - The `property-images` bucket is private; dashboard previews use short-lived signed URLs after the Storage RLS check. Do not upload sensitive or personally identifying images.
 
