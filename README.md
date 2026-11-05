@@ -15,7 +15,7 @@ The interface opens in a sample-data demo when Supabase environment variables ar
 1. Install Node.js 20 or newer.
 2. Run `npm install`.
 3. Copy `.env.example` to `.env.local` and fill in the Supabase project URL and public anon/publishable key.
-4. Apply `supabase/migrations/202611050001_initial_schema.sql` in the Supabase SQL Editor (or with the Supabase CLI).
+4. Apply the migrations in order: `supabase/migrations/202611050001_initial_schema.sql`, then `supabase/migrations/202611050002_agent_notifications.sql` (or use the Supabase CLI).
 5. Run `npm run dev`.
 
 ## Deploy to GitHub Pages
@@ -39,21 +39,27 @@ Set Supabase Auth email confirmation and password policies to suit your deployme
 
 ## Data contract for the bot
 
-The migration creates the shared tables:
+The migrations create the shared tables:
 
 - `profiles(id, role, display_name)`
 - `properties(id, created_by, title, property_type, description, location, monthly_rent, bedrooms, available_rooms, status, created_at)`
 - `property_images(id, property_id, storage_path, caption, sort_order)`
 - `conversations(id, phone_number, selected_location, state, last_message_at)`
 - `messages(id, conversation_id, direction, body, provider_message_id, media_url, created_at)`
+- `notifications(id, user_id, conversation_id, message_id, title, body, created_at, read_at)`
 
-The assistant should query only `properties.status = 'active'`, ordered/filtered by location and availability. Store each incoming/outgoing WhatsApp message in `messages` and upsert conversations by unique `phone_number`. Use the bucket `property-images`; listing photos are stored beneath a first-level folder containing their property UUID. The bot may use a server-side Supabase service role, which bypasses RLS; keep it secret, validate webhook signatures, and never expose it in this dashboard.
+The assistant should query only `properties.status = 'active'`, ordered/filtered by location and availability. Store each incoming/outgoing WhatsApp message in `messages` and upsert conversations by unique `phone_number`. The assistant can leave `conversations.assigned_to` null until an agent takes ownership. When an inbound message is received for an assigned conversation, a database trigger creates a private notification for that agent. Assigning a conversation with an existing inbound message also notifies the newly assigned agent. The dashboard checks for new conversations and notifications every 15 seconds; agents can optionally enable browser notifications in Settings.
+
+Use the bucket `property-images`; listing photos are stored beneath a first-level folder containing their property UUID. The bot may use a server-side Supabase service role, which bypasses RLS; keep it secret, validate webhook signatures, and never expose it in this dashboard.
+
+This MVP treats one Supabase project as one shared rental team: signed-in users can see the agent directory and monitor that project’s conversations, while notifications are scoped to their assigned agent. It does not yet isolate multiple businesses/workspaces within one Supabase project.
 
 ## Security notes
 
 - RLS scopes property mutations and photo operations to the authenticated creator.
 - Anonymous reads can see only active listings and their image metadata. The private Storage bucket issues signed URLs only for visible listing photos.
 - Authenticated dashboard users can read conversations and messages; the browser has no policies to write them.
+- Notifications are created server-side by database triggers and each agent can only read or mark their own notifications as read.
 - `property-images` accepts JPEG, PNG, and WebP files up to 10 MB.
 - The `property-images` bucket is private; dashboard previews use short-lived signed URLs after the Storage RLS check. Do not upload sensitive or personally identifying images.
 

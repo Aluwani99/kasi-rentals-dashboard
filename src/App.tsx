@@ -1,15 +1,16 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   ArrowDownLeft, ArrowRight, ArrowUpRight, BedDouble, Bell, Building2, Check,
-  ChevronDown, ChevronRight, CircleHelp, DoorOpen, Eye, EyeOff, Filter, Home,
-  ImagePlus, LogOut, MapPin, Menu, MessageCircle, MoreHorizontal, Plus, Search,
-  Settings2, ShieldCheck, SlidersHorizontal, Sparkles, Upload, Users, X,
+  ChevronDown, ChevronRight, CircleHelp, DoorOpen, Eye, EyeOff, ExternalLink,
+  Filter, Home, ImagePlus, LogOut, Mail, MapPin, Menu, MessageCircle,
+  MoreHorizontal, Plus, Search, Settings2, ShieldCheck, SlidersHorizontal,
+  Sparkles, Upload, Users, X,
 } from "lucide-react";
 import { isSupabaseConfigured, supabase } from "./lib/supabase";
 import { listingPhotoPath, validateListing, type ListingDraft } from "./lib/listings";
-import type { Conversation, Message, Profile, Property, PropertyImage, UserRole } from "./types";
+import type { Conversation, DashboardNotification, Message, Profile, Property, PropertyImage, UserRole } from "./types";
 
-type ViewName = "overview" | "listings" | "inbox";
+type ViewName = "overview" | "listings" | "inbox" | "team" | "settings" | "support";
 type ListingWithImages = Property;
 
 const blankDraft: ListingDraft = {
@@ -40,9 +41,18 @@ const sampleListings: ListingWithImages[] = [
 ];
 
 const sampleConversations: Conversation[] = [
-  { id: "chat-1", phone_number: "+27 72 481 2036", selected_location: "Tembisa", state: {}, last_message_at: new Date().toISOString() },
-  { id: "chat-2", phone_number: "+27 83 105 7724", selected_location: "Mamelodi", state: {}, last_message_at: new Date(Date.now() - 1000 * 60 * 45).toISOString() },
-  { id: "chat-3", phone_number: "+27 61 992 4810", selected_location: "Soweto", state: {}, last_message_at: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString() },
+  { id: "chat-1", phone_number: "+27 72 481 2036", assigned_to: "demo", selected_location: "Tembisa", state: {}, last_message_at: new Date().toISOString() },
+  { id: "chat-2", phone_number: "+27 83 105 7724", assigned_to: null, selected_location: "Mamelodi", state: {}, last_message_at: new Date(Date.now() - 1000 * 60 * 45).toISOString() },
+  { id: "chat-3", phone_number: "+27 61 992 4810", assigned_to: null, selected_location: "Soweto", state: {}, last_message_at: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString() },
+];
+
+const sampleTeam: Profile[] = [
+  { id: "demo", display_name: "Thandi Mokoena", role: "agent", desktop_notifications_enabled: true },
+  { id: "demo-owner", display_name: "Lerato Khumalo", role: "owner", desktop_notifications_enabled: false },
+];
+
+const sampleNotifications: DashboardNotification[] = [
+  { id: "note-1", user_id: "demo", conversation_id: "chat-1", message_id: "message-3", title: "New WhatsApp enquiry", body: "+27 72 481 2036: That sounds perfect, please send the photos 🙏", created_at: new Date(Date.now() - 1000 * 60 * 4).toISOString(), read_at: null },
 ];
 
 const sampleMessages: Message[] = [
@@ -92,6 +102,9 @@ function App() {
   const [listings, setListings] = useState<ListingWithImages[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [team, setTeam] = useState<Profile[]>([]);
+  const [notifications, setNotifications] = useState<DashboardNotification[]>([]);
+  const [demoAlerts, setDemoAlerts] = useState(sampleNotifications);
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -103,19 +116,31 @@ function App() {
   const [editing, setEditing] = useState<ListingWithImages | null>(null);
   const [demoMode, setDemoMode] = useState(!isSupabaseConfigured);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [authOpen, setAuthOpen] = useState(false);
+  const [notificationOpen, setNotificationOpen] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const notificationIds = useRef<Set<string>>(new Set());
 
   const refresh = useCallback(async () => {
     if (!supabase || !session) return;
     setLoading(true);
     setError("");
-    const [profileResult, propertiesResult, conversationsResult] = await Promise.all([
-      supabase.from("profiles").select("id,role,display_name").eq("id", session.user.id).maybeSingle(),
+    const [profileResult, propertiesResult, conversationsResult, teamResult, notificationResult] = await Promise.all([
+      supabase.from("profiles").select("id,role,display_name,desktop_notifications_enabled").eq("id", session.user.id).maybeSingle(),
       supabase.from("properties").select("*,property_images(*)").order("created_at", { ascending: false }),
       supabase.from("conversations").select("*").order("last_message_at", { ascending: false }),
+      supabase.from("profiles").select("id,role,display_name,desktop_notifications_enabled").order("display_name"),
+      supabase.from("notifications").select("*").order("created_at", { ascending: false }).limit(30),
     ]);
-    const resultError = profileResult.error || propertiesResult.error || conversationsResult.error;
+    const resultError = profileResult.error || propertiesResult.error || conversationsResult.error || teamResult.error || notificationResult.error;
     if (resultError) setError(resultError.message);
     if (profileResult.data) setProfile(profileResult.data as Profile);
+    if (teamResult.data) setTeam(teamResult.data as Profile[]);
+    if (notificationResult.data) {
+      const currentNotifications = notificationResult.data as DashboardNotification[];
+      notificationIds.current = new Set(currentNotifications.map((item) => item.id));
+      setNotifications(currentNotifications);
+    }
     if (propertiesResult.data) setListings(propertiesResult.data as ListingWithImages[]);
     if (conversationsResult.data) {
       const chats = conversationsResult.data as Conversation[];
@@ -164,15 +189,26 @@ function App() {
     const client = supabase;
     let active = true;
     const timer = window.setInterval(async () => {
-      const { data: chats, error: chatError } = await client.from("conversations")
-        .select("*").order("last_message_at", { ascending: false });
+      const [chatsResult, alertsResult, teamResult] = await Promise.all([
+        client.from("conversations").select("*").order("last_message_at", { ascending: false }),
+        client.from("notifications").select("*").order("created_at", { ascending: false }).limit(30),
+        client.from("profiles").select("id,role,display_name,desktop_notifications_enabled").order("display_name"),
+      ]);
       if (!active) return;
-      if (chatError) {
-        setError(chatError.message);
+      if (chatsResult.error || alertsResult.error || teamResult.error) {
+        setError(chatsResult.error?.message || alertsResult.error?.message || teamResult.error?.message || "Could not refresh the workspace.");
         return;
       }
-      const currentChats = (chats || []) as Conversation[];
+      const currentChats = (chatsResult.data || []) as Conversation[];
       setConversations(currentChats);
+      if (teamResult.data) setTeam(teamResult.data as Profile[]);
+      const currentNotifications = (alertsResult.data || []) as DashboardNotification[];
+      const addedNotifications = currentNotifications.filter((item) => !notificationIds.current.has(item.id));
+      notificationIds.current = new Set(currentNotifications.map((item) => item.id));
+      setNotifications(currentNotifications);
+      if (addedNotifications.length && profile?.desktop_notifications_enabled && "Notification" in window && Notification.permission === "granted") {
+        addedNotifications.forEach((item) => new Notification(item.title, { body: item.body }));
+      }
       setSelectedConversation((current) => current && currentChats.some((chat) => chat.id === current)
         ? current : currentChats[0]?.id ?? null);
       if (!currentChats.length) {
@@ -189,12 +225,14 @@ function App() {
       active = false;
       window.clearInterval(timer);
     };
-  }, [session]);
+  }, [profile?.desktop_notifications_enabled, session]);
 
   const isDemo = demoMode;
   const visibleListings = isDemo ? sampleListings : listings;
   const visibleConversations = isDemo ? sampleConversations : conversations;
   const visibleMessages = isDemo ? sampleMessages : messages;
+  const visibleTeam = isDemo ? sampleTeam : team;
+  const visibleNotifications = isDemo ? demoAlerts : notifications;
   const activeChat = visibleConversations.find((chat) => chat.id === selectedConversation) || visibleConversations[0] || null;
   const chatMessages = activeChat ? visibleMessages.filter((message) => message.conversation_id === activeChat.id) : [];
   const filteredListings = useMemo(() => visibleListings.filter((item) =>
@@ -210,6 +248,98 @@ function App() {
   function newListing() {
     setEditing(null);
     setEditorOpen(true);
+  }
+
+  async function assignConversation(conversationId: string, agentId: string) {
+    if (isDemo || !supabase) {
+      showNotice("Demo mode — connect Supabase to save conversation assignments.");
+      return;
+    }
+    const { error: assignmentError } = await supabase.from("conversations")
+      .update({ assigned_to: agentId || null }).eq("id", conversationId);
+    if (assignmentError) setError(assignmentError.message);
+    else {
+      showNotice(agentId ? "Conversation assigned. The agent will be notified of the latest request." : "Conversation unassigned.");
+      await refresh();
+    }
+  }
+
+  async function markNotificationRead(notification: DashboardNotification) {
+    if (isDemo) {
+      setDemoAlerts((current) => current.map((item) =>
+        item.id === notification.id ? { ...item, read_at: new Date().toISOString() } : item,
+      ));
+    } else if (supabase && !notification.read_at) {
+      const { error: readError } = await supabase.from("notifications")
+        .update({ read_at: new Date().toISOString() }).eq("id", notification.id);
+      if (readError) setError(readError.message);
+      else {
+        setNotifications((current) => current.map((item) =>
+          item.id === notification.id ? { ...item, read_at: new Date().toISOString() } : item,
+        ));
+      }
+    }
+    setSelectedConversation(notification.conversation_id);
+    setView("inbox");
+    setNotificationOpen(false);
+  }
+
+  async function setDesktopNotifications(enabled: boolean) {
+    if (isDemo || !supabase || !session) {
+      showNotice("Demo mode — connect Supabase to save notification settings.");
+      return;
+    }
+    if (enabled && "Notification" in window && Notification.permission === "default") {
+      await Notification.requestPermission();
+    }
+    if (enabled && (!("Notification" in window) || Notification.permission !== "granted")) {
+      showNotice("Allow notifications in your browser settings, then try again.");
+      return;
+    }
+    const { error: preferenceError } = await supabase.from("profiles")
+      .update({ desktop_notifications_enabled: enabled }).eq("id", session.user.id);
+    if (preferenceError) setError(preferenceError.message);
+    else setProfile((current) => current ? { ...current, desktop_notifications_enabled: enabled } : current);
+  }
+
+  async function inviteAgent(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!supabase || isDemo) {
+      showNotice("Connect Supabase to invite a teammate.");
+      return;
+    }
+    const formData = new FormData(event.currentTarget);
+    const email = String(formData.get("email") || "").trim();
+    const name = String(formData.get("name") || "").trim();
+    const { error: inviteError } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        data: { display_name: name, role: "agent" },
+        emailRedirectTo: window.location.origin + window.location.pathname,
+      },
+    });
+    if (inviteError) setError(inviteError.message);
+    else {
+      setInviteOpen(false);
+      showNotice(`A sign-in link was sent to ${email}.`);
+    }
+  }
+
+  async function saveProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!supabase || !session || isDemo) {
+      showNotice("Demo mode — connect Supabase to save profile settings.");
+      return;
+    }
+    const formData = new FormData(event.currentTarget);
+    const displayName = String(formData.get("display_name") || "").trim();
+    const { error: profileError } = await supabase.from("profiles").update({ display_name: displayName })
+      .eq("id", session.user.id);
+    if (profileError) setError(profileError.message);
+    else {
+      setProfile((current) => current ? { ...current, display_name: displayName } : current);
+      showNotice("Profile settings saved.");
+    }
   }
 
   async function saveListing(event: FormEvent<HTMLFormElement>) {
@@ -341,8 +471,8 @@ function App() {
 
   if (authLoading) return <div className="loading-screen"><span className="brand-mark"><Home size={21} /></span><span>Opening your workspace…</span></div>;
 
-  if (!isDemo && !session) {
-    return <AuthScreen onDemo={() => setDemoMode(true)} />;
+  if ((!isDemo && !session) || authOpen) {
+    return <AuthScreen configured={isSupabaseConfigured} onDemo={() => { setDemoMode(true); setAuthOpen(false); }} />;
   }
 
   const appProfile = profile || { id: "demo", role: "agent" as UserRole, display_name: "Thandi Mokoena" };
@@ -364,8 +494,8 @@ function App() {
         </nav>
         <div className="side-label side-label-spaced">MANAGE</div>
         <nav className="main-nav">
-          <button className="nav-item" onClick={() => showNotice("Team management is coming soon.")}><Users size={18} /><span>My team</span><span className="soon-tag">SOON</span></button>
-          <button className="nav-item" onClick={() => showNotice("Settings are coming soon.")}><Settings2 size={18} /><span>Settings</span></button>
+          <NavButton active={view === "team"} icon={<Users size={18} />} label="My team" count={visibleTeam.length} onClick={() => { setView("team"); setSidebarOpen(false); }} />
+          <NavButton active={view === "settings"} icon={<Settings2 size={18} />} label="Settings" onClick={() => { setView("settings"); setSidebarOpen(false); }} />
         </nav>
         <div className="sidebar-spacer" />
         <div className="whatsapp-card">
@@ -373,7 +503,7 @@ function App() {
           <div><b>Always in the loop</b><p>Your WhatsApp inbox is ready for every new enquiry.</p></div>
           <ArrowRight size={15} />
         </div>
-        <button className="nav-item help-link" onClick={() => showNotice("Need help? Contact hello@kasirentals.co.za")}><CircleHelp size={18} /><span>Help & support</span></button>
+        <NavButton active={view === "support"} icon={<CircleHelp size={18} />} label="Help & support" onClick={() => { setView("support"); setSidebarOpen(false); }} />
         <div className="profile-footer">
           <div className="avatar">{initials(appProfile.display_name)}</div>
           <div className="profile-meta"><b>{appProfile.display_name || "Your profile"}</b><small>{session?.user.email || "Demo workspace"}</small></div>
@@ -387,20 +517,26 @@ function App() {
       <main className="main-content">
         <header className="topbar">
           <button className="icon-btn mobile-menu" aria-label="Open menu" onClick={() => setSidebarOpen(true)}><Menu size={19} /></button>
-          <div className="breadcrumbs"><span>Workspace</span><ChevronRight size={14} /><b>{view === "overview" ? "Overview" : view === "listings" ? "My listings" : "WhatsApp inbox"}</b></div>
+          <div className="breadcrumbs"><span>Workspace</span><ChevronRight size={14} /><b>{view === "overview" ? "Overview" : view === "listings" ? "My listings" : view === "inbox" ? "WhatsApp inbox" : view === "team" ? "My team" : view === "settings" ? "Settings" : "Help & support"}</b></div>
           <div className="topbar-actions">
             {isDemo && <span className="demo-pill"><span /> DEMO DATA</span>}
-            <button className="icon-btn notification-btn" aria-label="Notifications" onClick={() => showNotice("You’re all caught up.")}><Bell size={18} /><i /></button>
+            <button className={`icon-btn notification-btn ${notificationOpen ? "active" : ""}`} aria-label="Notifications" onClick={() => setNotificationOpen((current) => !current)}><Bell size={18} />{visibleNotifications.some((item) => !item.read_at) && <i />}</button>
+            {!session && <button className="btn btn-outline signin-button" onClick={() => setAuthOpen(true)}>Sign in</button>}
             <div className="topbar-avatar">{initials(appProfile.display_name)}</div>
           </div>
+          {notificationOpen && <NotificationPanel notifications={visibleNotifications} onSelect={markNotificationRead} onClose={() => setNotificationOpen(false)} />}
         </header>
         {(error || notice) && <div className={`feedback-banner ${error ? "error" : "success"}`} role="status">{error ? <CircleHelp size={17} /> : <Check size={17} />}{error || notice}{error && <button className="icon-btn" onClick={() => setError("")}><X size={16} /></button>}</div>}
         {view === "overview" && <Overview listings={visibleListings} conversations={visibleConversations} messages={visibleMessages} onNewListing={newListing} onListings={() => setView("listings")} onInbox={() => setView("inbox")} />}
         {view === "listings" && <ListingsView listings={filteredListings} search={search} setSearch={setSearch} statusFilter={statusFilter} setStatusFilter={setStatusFilter} onCreate={newListing} onEdit={(item) => { setEditing(item); setEditorOpen(true); }} onDelete={deleteListing} onStatus={updateStatus} loading={loading} />}
-        {view === "inbox" && <InboxView conversations={visibleConversations} messages={visibleMessages} activeChat={activeChat} chatMessages={chatMessages} selected={selectedConversation} onSelect={setSelectedConversation} />}
+        {view === "inbox" && <InboxView conversations={visibleConversations} messages={visibleMessages} activeChat={activeChat} chatMessages={chatMessages} selected={selectedConversation} onSelect={setSelectedConversation} agents={visibleTeam.filter((member) => member.role === "agent")} onAssign={assignConversation} />}
+        {view === "team" && <TeamView team={visibleTeam} currentUserId={session?.user.id || "demo"} onInvite={() => setInviteOpen(true)} />}
+        {view === "settings" && <SettingsView profile={appProfile} email={session?.user.email || "Demo workspace"} onSave={saveProfile} onNotificationChange={setDesktopNotifications} />}
+        {view === "support" && <SupportView onInbox={() => setView("inbox")} />}
       </main>
       {sidebarOpen && <button className="sidebar-backdrop" aria-label="Close navigation" onClick={() => setSidebarOpen(false)} />}
       {editorOpen && <ListingEditor key={editing?.id || "new"} listing={editing} saving={loading} onClose={() => setEditorOpen(false)} onSave={saveListing} />}
+      {inviteOpen && <InviteModal onClose={() => setInviteOpen(false)} onInvite={inviteAgent} />}
     </div>
   );
 }
@@ -530,9 +666,10 @@ function ListingCard({ listing, onEdit, onDelete, onStatus }: {
   </article>;
 }
 
-function InboxView({ conversations, messages, activeChat, chatMessages, selected, onSelect }: {
+function InboxView({ conversations, messages, activeChat, chatMessages, selected, onSelect, agents, onAssign }: {
   conversations: Conversation[]; messages: Message[]; activeChat: Conversation | null;
   chatMessages: Message[]; selected: string | null; onSelect: (id: string) => void;
+  agents: Profile[]; onAssign: (conversationId: string, agentId: string) => void;
 }) {
   const [filter, setFilter] = useState("");
   const filteredChats = conversations.filter((chat) => chat.phone_number.includes(filter) || (chat.selected_location || "").toLowerCase().includes(filter.toLowerCase()));
@@ -555,7 +692,7 @@ function InboxView({ conversations, messages, activeChat, chatMessages, selected
       </section>
       <section className="chat-detail">
         {activeChat ? <>
-          <div className="chat-detail-head"><div className="chat-avatar chat-avatar-0">{initials(activeChat.phone_number.replace(/\D/g, "").slice(-4))}</div><div className="detail-person"><b>{activeChat.phone_number}</b><span><i /> WhatsApp · {activeChat.selected_location || "Location not set"}</span></div><button className="btn btn-outline" onClick={() => window.open(`https://wa.me/${activeChat.phone_number.replace(/\D/g, "")}`, "_blank", "noopener,noreferrer")}><MessageCircle size={15} /> Open WhatsApp</button><button className="icon-btn"><MoreHorizontal size={19} /></button></div>
+          <div className="chat-detail-head"><div className="chat-avatar chat-avatar-0">{initials(activeChat.phone_number.replace(/\D/g, "").slice(-4))}</div><div className="detail-person"><b>{activeChat.phone_number}</b><span><i /> WhatsApp · {activeChat.selected_location || "Location not set"}</span></div><label className="assign-control"><Users size={14} /><select aria-label="Assign conversation to an agent" value={activeChat.assigned_to || ""} onChange={(event) => onAssign(activeChat.id, event.target.value)}><option value="">Unassigned</option>{agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.display_name || "Agent"}</option>)}</select><ChevronDown size={12} /></label><button className="btn btn-outline" onClick={() => window.open(`https://wa.me/${activeChat.phone_number.replace(/\D/g, "")}`, "_blank", "noopener,noreferrer")}><MessageCircle size={15} /> Open WhatsApp</button></div>
           <div className="chat-date-line"><span />Today<span /></div>
           <div className="message-stream">
             {chatMessages.map((message) => <div key={message.id} className={`message-row ${message.direction}`}>
@@ -614,7 +751,115 @@ function ExistingPhoto({ image, onRemove }: { image: PropertyImage; onRemove: ()
   return url ? <div className="photo-thumb"><img src={url} alt={image.caption || "Property"} /><button type="button" aria-label="Remove photo" onClick={onRemove}><X size={12} /></button></div> : null;
 }
 
-function AuthScreen({ onDemo }: { onDemo: () => void }) {
+function NotificationPanel({ notifications, onSelect, onClose }: {
+  notifications: DashboardNotification[];
+  onSelect: (notification: DashboardNotification) => void;
+  onClose: () => void;
+}) {
+  return <section className="notification-panel" aria-label="Notifications">
+    <div className="notification-panel-head"><div><b>Notifications</b><small>WhatsApp requests assigned to you</small></div><button className="icon-btn" aria-label="Close notifications" onClick={onClose}><X size={16} /></button></div>
+    <div className="notification-items">
+      {notifications.map((item) => <button key={item.id} className={`notification-item ${item.read_at ? "" : "unread"}`} onClick={() => onSelect(item)}>
+        <span className="notification-item-icon"><MessageCircle size={15} /></span><span className="notification-item-copy"><b>{item.title}</b><span>{item.body}</span><small>{timeAgo(item.created_at)}</small></span>{!item.read_at && <i />}
+      </button>)}
+      {!notifications.length && <div className="notification-empty"><Bell size={19} /><b>You’re all caught up</b><span>Requests assigned to you will appear here.</span></div>}
+    </div>
+    <button className="notification-footer" onClick={() => { onClose(); }}>Notifications are private to your account</button>
+  </section>;
+}
+
+function TeamView({ team, currentUserId, onInvite }: { team: Profile[]; currentUserId: string; onInvite: () => void }) {
+  return <div className="page-wrap management-page">
+    <div className="page-heading-row"><div><div className="eyebrow">YOUR PEOPLE</div><h1>My team</h1><p>Keep your team in sync and make sure every enquiry has an owner.</p></div><button className="btn btn-primary" onClick={onInvite}><Plus size={16} /> Invite an agent</button></div>
+    <div className="team-banner"><div className="team-banner-icon"><Users size={20} /></div><div><b>Better together</b><p>Invite a teammate to help manage enquiries. They’ll get a secure sign-in link by email.</p></div><span className="team-count">{team.length} {team.length === 1 ? "member" : "members"}</span></div>
+    <section className="content-card team-table">
+      <div className="management-card-heading"><div><h2>Team members</h2><p>People with access to this rentals workspace.</p></div><span className="table-caption">DIRECTORY</span></div>
+      <div className="team-table-head"><span>MEMBER</span><span>ROLE</span><span>DESKTOP ALERTS</span><span>STATUS</span></div>
+      {team.map((member, index) => <div className="team-row" key={member.id}>
+        <div className={`team-avatar team-avatar-${index % 4}`}>{initials(member.display_name)}</div>
+        <div className="team-person"><b>{member.display_name || "New team member"}{member.id === currentUserId && <span className="you-tag">YOU</span>}</b><small>{member.role === "owner" ? "Property owner" : "Rental agent"}</small></div>
+        <span className={`role-chip ${member.role}`}>{member.role === "owner" ? "Owner" : "Agent"}</span>
+        <span className="member-alert-state">{member.desktop_notifications_enabled ? <><i className="online-dot" /> Enabled</> : <span>Off</span>}</span>
+        <span className="member-status"><i /> Active</span>
+      </div>)}
+      {!team.length && <EmptyState title="Your team starts here" text="Invite the agents who will look after your enquiries." action="Invite an agent" onClick={onInvite} />}
+    </section>
+    <div className="team-security-note"><ShieldCheck size={15} /> Each agent sees their own alerts. Conversation access is shared with signed-in dashboard members.</div>
+  </div>;
+}
+
+function SettingsView({ profile, email, onSave, onNotificationChange }: {
+  profile: Profile; email: string; onSave: (event: FormEvent<HTMLFormElement>) => void;
+  onNotificationChange: (enabled: boolean) => void;
+}) {
+  const [resetSent, setResetSent] = useState(false);
+  async function sendPasswordReset() {
+    if (!supabase || email === "Demo workspace") return;
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.href });
+    if (resetError) return;
+    setResetSent(true);
+  }
+  return <div className="page-wrap management-page">
+    <div className="page-heading-row"><div><div className="eyebrow">MAKE IT YOURS</div><h1>Settings</h1><p>Manage your account and how you hear about new enquiries.</p></div><span className="settings-badge"><Settings2 size={15} /> WORKSPACE SETTINGS</span></div>
+    <div className="settings-layout">
+      <div className="settings-main">
+        <section className="content-card settings-card">
+          <div className="management-card-heading"><div><h2>Your profile</h2><p>How you show up to your team.</p></div><div className="settings-profile-avatar">{initials(profile.display_name)}</div></div>
+          <form className="settings-form" onSubmit={onSave}>
+            <label className="field"><span>Display name</span><input name="display_name" defaultValue={profile.display_name} placeholder="Your name" required maxLength={80} /></label>
+            <label className="field"><span>Email address</span><input value={email} readOnly aria-readonly="true" /></label>
+            <label className="field"><span>Account role</span><input value={profile.role === "owner" ? "Property owner" : "Rental agent"} readOnly aria-readonly="true" /></label>
+            <div className="settings-actions"><span>Profile updates are only visible to signed-in team members.</span><button className="btn btn-primary" type="submit"><Check size={15} /> Save changes</button></div>
+          </form>
+        </section>
+        <section className="content-card settings-card alert-settings">
+          <div className="management-card-heading"><div><h2>Notifications</h2><p>Choose when this device should alert you.</p></div><div className="notification-setting-icon"><Bell size={18} /></div></div>
+          <label className="preference-row"><span className="preference-icon"><MessageCircle size={17} /></span><span className="preference-copy"><b>WhatsApp enquiry alerts</b><small>Get a browser notification when a new message is assigned to you.</small></span><input type="checkbox" checked={Boolean(profile.desktop_notifications_enabled)} onChange={(event) => onNotificationChange(event.target.checked)} /></label>
+          <p className="permission-hint">Browser alerts require permission for this site and work while the dashboard is open.</p>
+        </section>
+        <section className="content-card settings-card">
+          <div className="management-card-heading"><div><h2>Password & sign-in</h2><p>Keep your account protected.</p></div><div className="secure-icon"><ShieldCheck size={18} /></div></div>
+          <div className="password-reset-row"><div><b>Password reset</b><small>{resetSent ? "Reset link sent — check your inbox." : "We’ll email you a secure password reset link."}</small></div><button className="btn btn-outline" onClick={() => void sendPasswordReset()} disabled={email === "Demo workspace"}>Send reset link <ArrowRight size={14} /></button></div>
+        </section>
+      </div>
+      <aside className="settings-aside">
+        <div className="settings-tip"><Sparkles size={17} /><b>A little heads-up goes a long way.</b><p>Enable browser alerts to see new WhatsApp requests even while you’re working in another tab.</p></div>
+        <div className="content-card workspace-info"><span className="workspace-icon"><Home size={17} /></span><b>Kasi Rentals workspace</b><small>Shared rental team</small><span className="workspace-info-line" /><small>Property listings: visible to your account</small><small>WhatsApp alerts: private to each agent</small></div>
+      </aside>
+    </div>
+  </div>;
+}
+
+function SupportView({ onInbox }: { onInbox: () => void }) {
+  return <div className="page-wrap management-page">
+    <div className="page-heading-row"><div><div className="eyebrow">WE’RE HERE TO HELP</div><h1>Help & support</h1><p>Quick answers for the everyday things.</p></div><a className="btn btn-primary" href="mailto:hello@kasirentals.co.za?subject=Kasi%20Rentals%20support"><Mail size={16} /> Contact support</a></div>
+    <div className="support-highlight"><div className="support-highlight-icon"><CircleHelp size={22} /></div><div><span>NEED A HAND?</span><h2>Real people, ready to help.</h2><p>Send us a note and tell us what you’re trying to do. We’ll get back to you as soon as we can.</p><a href="mailto:hello@kasirentals.co.za?subject=Kasi%20Rentals%20support">hello@kasirentals.co.za <ExternalLink size={13} /></a></div><div className="support-doodle">✳</div></div>
+    <div className="support-grid">
+      <section className="content-card support-faq"><div className="management-card-heading"><div><h2>Frequently asked</h2><p>A few helpful things to know.</p></div></div>
+        <details><summary>How do I publish a room or house? <ChevronDown size={15} /></summary><p>Open My listings, choose Add a listing, add your location, price and room count, then choose Publish listing. Only published listings are shown to the WhatsApp assistant.</p></details>
+        <details><summary>How do I get WhatsApp enquiry alerts? <ChevronDown size={15} /></summary><p>Assign a conversation to your agent in the WhatsApp inbox. Turn on browser alerts in Settings and allow notifications when your browser asks.</p></details>
+        <details><summary>Can I reply to WhatsApp chats here? <ChevronDown size={15} /></summary><p>This dashboard is for monitoring. The assistant sends replies through WhatsApp. Open a chat in WhatsApp if you need to continue the conversation yourself.</p></details>
+        <details><summary>How do I add an agent to my team? <ChevronDown size={15} /></summary><p>Go to My team and send the agent a secure sign-in link by email. They can then sign in to the dashboard.</p></details>
+      </section>
+      <aside className="support-side-stack">
+        <button className="content-card support-action-card" onClick={onInbox}><span className="support-action-icon"><MessageCircle size={18} /></span><span><b>Check your inbox</b><small>Review a WhatsApp request</small></span><ArrowRight size={16} /></button>
+        <a className="content-card support-action-card" href="mailto:hello@kasirentals.co.za?subject=Kasi%20Rentals%20support"><span className="support-action-icon peach"><Mail size={18} /></span><span><b>Email our team</b><small>hello@kasirentals.co.za</small></span><ArrowRight size={16} /></a>
+        <div className="support-safety-note"><ShieldCheck size={16} /><span><b>Your account stays yours.</b><br />We’ll never ask you to share your password or a WhatsApp verification code.</span></div>
+      </aside>
+    </div>
+  </div>;
+}
+
+function InviteModal({ onClose, onInvite }: { onClose: () => void; onInvite: (event: FormEvent<HTMLFormElement>) => void }) {
+  return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <section className="invite-modal content-card" role="dialog" aria-modal="true" aria-labelledby="invite-title">
+      <div className="modal-header"><div><div className="eyebrow">GROW YOUR TEAM</div><h2 id="invite-title">Invite an agent</h2><p>We’ll send them a secure sign-in link.</p></div><button className="icon-btn" aria-label="Close invite" onClick={onClose}><X size={19} /></button></div>
+      <form className="invite-form" onSubmit={onInvite}><label className="field"><span>Agent name</span><input name="name" required maxLength={80} placeholder="e.g. Naledi Dlamini" /></label><label className="field"><span>Email address</span><input type="email" name="email" required placeholder="agent@example.com" /></label><div className="invite-role-note"><Users size={15} /> They’ll join as a rental agent.</div><div className="modal-footer"><span><ShieldCheck size={14} /> No password is shared by email.</span><div><button className="btn btn-outline" type="button" onClick={onClose}>Cancel</button><button className="btn btn-primary" type="submit"><Mail size={14} /> Send invite</button></div></div></form>
+    </section>
+  </div>;
+}
+
+function AuthScreen({ onDemo, configured }: { onDemo: () => void; configured: boolean }) {
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [role, setRole] = useState<UserRole>("agent");
   const [busy, setBusy] = useState(false);
@@ -622,7 +867,10 @@ function AuthScreen({ onDemo }: { onDemo: () => void }) {
   const [showPassword, setShowPassword] = useState(false);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!supabase) return;
+    if (!supabase) {
+      setError("Sign in is not connected yet. Configure Supabase to enable accounts.");
+      return;
+    }
     setBusy(true); setError("");
     const values = new FormData(event.currentTarget);
     const email = String(values.get("email"));
@@ -639,6 +887,7 @@ function AuthScreen({ onDemo }: { onDemo: () => void }) {
     <main className="auth-main"><div className="auth-form-wrap"><div className="eyebrow">WELCOME TO YOUR RENTAL HQ</div><h1>{mode === "signin" ? "Good to have you back." : "Let’s get you set up."}</h1><p>{mode === "signin" ? "Sign in to pick up right where you left off." : "Create your account and start sharing your listings."}</p>
       <div className="auth-tabs"><button className={mode === "signin" ? "selected" : ""} onClick={() => setMode("signin")}>Sign in</button><button className={mode === "signup" ? "selected" : ""} onClick={() => setMode("signup")}>Create account</button></div>
       <form onSubmit={submit} className="auth-form">
+        {!configured && <div className="auth-error"><CircleHelp size={15} />Account sign-in needs a Supabase project. You can still explore the demo below.</div>}
         {mode === "signup" && <><label className="field"><span>Your name</span><input name="name" placeholder="e.g. Thandi Mokoena" required /></label><div className="role-picker"><span>I’m joining as a...</span><div><button type="button" className={role === "agent" ? "selected" : ""} onClick={() => setRole("agent")}><Users size={15} /> Rental agent</button><button type="button" className={role === "owner" ? "selected" : ""} onClick={() => setRole("owner")}><Home size={15} /> Property owner</button></div></div></>}
         <label className="field"><span>Email address</span><input name="email" type="email" placeholder="you@example.com" autoComplete="email" required /></label>
         <label className="field"><span>Password</span><span className="input-with-icon password-input"><input name="password" type={showPassword ? "text" : "password"} placeholder="At least 8 characters" minLength={8} autoComplete={mode === "signin" ? "current-password" : "new-password"} required /><button type="button" className="icon-btn" aria-label={showPassword ? "Hide password" : "Show password"} onClick={() => setShowPassword(!showPassword)}>{showPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button></span></label>
