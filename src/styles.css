@@ -24,7 +24,7 @@ body { margin: 0; min-width: 320px; min-height: 100vh; }
 button, input, select, textarea { font: inherit; }
 button { cursor: pointer; }
 button:disabled { cursor: wait; opacity: .65; }
-button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid #86b89a; outline-offset: 2px; }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible { outline: 3px solid #86b89a; outline-offset: 2px; }
 
 .app-shell { display: flex; min-height: 100vh; }
 .sidebar { width: 252px; background: #fff; border-right: 1px solid #eceee9; padding: 27px 16px 16px; display: flex; flex-direction: column; flex-shrink: 0; }
@@ -375,6 +375,43 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .demo-link { width: 100%; border: 0; background: transparent; margin-top: 20px; color: #64816a; font-size: 9px; display: flex; justify-content: center; align-items: center; gap: 5px; }
 .demo-link:hover { color: #285e40; }
 
+/* Public rental details */
+.public-listing-page { min-height: 100vh; background: var(--canvas); }
+.public-listing-header { min-height: 70px; padding: 12px max(24px, calc((100vw - 1120px) / 2)); background: white; border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.public-brand { text-decoration: none; }
+.public-brand strong { font: 800 17px Manrope, sans-serif; letter-spacing: -.8px; color: #26342b; }
+.public-brand strong span { color: #6b9478; }
+.public-brand small { display: block; font-size: 8px; letter-spacing: 1.5px; color: #9da39a; font-weight: 700; margin-top: 4px; }
+.public-back-link { text-decoration: none; }
+.public-listing-content { width: min(1120px, calc(100% - 48px)); margin: 0 auto; padding: 38px 0 30px; }
+.public-listing-heading { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; margin-bottom: 22px; }
+.public-listing-heading h1 { font: 700 clamp(25px, 4vw, 36px)/1.15 Manrope, sans-serif; letter-spacing: -1.2px; margin: 8px 0; color: #2b342c; }
+.public-location { display: flex; align-items: center; gap: 6px; margin: 0; color: #818a7f; font-size: 13px; }
+.public-rent { display: flex; flex-direction: column; align-items: flex-end; color: #879084; font-size: 12px; white-space: nowrap; }
+.public-rent b { color: #354238; font: 700 24px Manrope, sans-serif; }
+.public-gallery { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.public-gallery img, .public-photo-pending { width: 100%; height: 245px; object-fit: cover; border-radius: 9px; background: #e8eee6; }
+.public-gallery img:first-child:nth-last-child(1) { grid-column: 1 / -1; height: min(55vw, 520px); }
+.public-gallery img:first-child:nth-last-child(2) { grid-column: span 2; grid-row: span 2; height: 500px; }
+.public-photo-pending { display: grid; place-items: center; color: #758b75; font-size: 12px; }
+.public-no-photos { grid-column: 1 / -1; min-height: 200px; border-radius: 9px; display: grid; place-items: center; background: #edf2eb; color: #718071; font-size: 13px; }
+.public-details-grid { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 30px; padding: 27px 0; border-bottom: 1px solid #e6e9e2; }
+.public-description h2 { font: 700 19px Manrope, sans-serif; margin: 0 0 10px; color: #344137; }
+.public-description p { color: #6f786e; font-size: 14px; line-height: 1.7; white-space: pre-wrap; margin: 0; }
+.public-facts { display: grid; align-content: start; gap: 12px; }
+.public-facts > div { display: flex; align-items: center; gap: 10px; padding: 13px; border: 1px solid #e8ebe4; border-radius: 8px; background: white; color: #758575; font-size: 12px; }
+.public-facts b { color: #3e4c40; }
+.public-privacy-note { display: flex; align-items: center; justify-content: center; gap: 6px; color: #8d9789; font-size: 11px; margin: 18px 0 0; }
+.public-message { min-height: 55vh; display: flex; justify-content: center; align-items: center; padding: 24px; color: #748176; font-size: 14px; text-align: center; }
+.public-message-error { color: #a84b3e; }
+.public-photo-error { color: #a84b3e; font-size: 12px; text-align: center; }
+.public-not-found { flex-direction: column; gap: 8px; }
+.public-not-found h1 { margin: 4px 0 0; font: 700 25px Manrope, sans-serif; color: #344137; }
+.public-not-found p { margin: 0 0 10px; color: #858e83; font-size: 13px; }
+.public-empty-icon { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 14px; background: #eaf2e9; color: #4f825d; }
+.public-listing-link { display: inline-flex; align-items: center; gap: 2px; padding: 0 5px; color: #4e7958; font-size: 9px; font-weight: 600; text-decoration: none; white-space: nowrap; }
+.public-listing-link:hover { color: #245c43; text-decoration: underline; }
+
 @media (min-width: 1400px) {
   .page-wrap { padding-left: 52px; padding-right: 52px; }
   .hero-panel { height: 275px; }
@@ -391,6 +428,17 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .hero-copy { width: 57%; }
 }
 @media (max-width: 760px) {
+  .public-listing-header { min-height: 60px; padding: 10px 16px; }
+  .public-listing-content { width: calc(100% - 32px); padding-top: 27px; }
+  .public-listing-heading { align-items: flex-start; flex-direction: column; gap: 12px; }
+  .public-rent { align-items: flex-start; }
+  .public-gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+  .public-gallery img, .public-photo-pending { height: 150px; }
+  .public-gallery img:first-child:nth-last-child(1) { height: 58vw; }
+  .public-gallery img:first-child:nth-last-child(2) { height: 307px; }
+  .public-details-grid { grid-template-columns: 1fr; gap: 20px; padding: 22px 0; }
+  .public-facts { grid-template-columns: 1fr 1fr; }
+  .public-back-link { height: 34px; padding: 0 9px; font-size: 9px; }
   .sidebar { position: fixed; z-index: 25; inset: 0 auto 0 0; width: min(280px, 85vw); transform: translateX(-105%); box-shadow: 8px 0 24px #17241b20; }
   .sidebar.open { transform: translateX(0); }
   .sidebar-backdrop { position: fixed; inset: 0; z-index: 24; border: 0; background: #14231970; }

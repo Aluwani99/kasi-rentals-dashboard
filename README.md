@@ -8,7 +8,7 @@ A web dashboard for rental agents and property owners to maintain room and house
 - Supabase Auth, Postgres, Row Level Security, and Storage
 - Meta WhatsApp Cloud API is configured by the separate bot service, not in this browser app
 
-The interface opens in a sample-data demo when Supabase environment variables are absent. Demo edits are intentionally not saved. Configure Supabase to sign in and use live listings and conversations.
+The interface opens in a sample-data demo when Supabase environment variables are absent. Demo edits are intentionally not saved. Configure Supabase to sign in and use live listings and conversations. Published listings can be shared through their public detail link; each link opens the selected active rental and its photos without requiring a renter to sign in.
 
 ## Run locally
 
@@ -41,7 +41,7 @@ The assistant should query only `properties.status = 'active'`, ordered/filtered
 ## Security notes
 
 - RLS scopes property mutations and photo operations to the authenticated creator.
-- Anonymous reads can see only active listings and their image metadata. The private Storage bucket issues signed URLs only for visible listing photos.
+- Anonymous reads can see only active listings and their image metadata. The private Storage bucket issues signed URLs only for photos belonging to active listings or the authenticated user’s own listings.
 - Authenticated dashboard users can read conversations and messages; the browser has no policies to write them.
 - `property-images` accepts JPEG, PNG, and WebP files up to 10 MB.
 - The `property-images` bucket is private; dashboard previews use short-lived signed URLs after the Storage RLS check. Do not upload sensitive or personally identifying images.

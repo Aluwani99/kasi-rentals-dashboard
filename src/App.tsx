@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { isSupabaseConfigured, supabase } from "./lib/supabase";
 import { listingPhotoPath, validateListing, type ListingDraft } from "./lib/listings";
+import { isPropertyId, publicListingUrl } from "./lib/publicListing";
 import type { Conversation, Message, Profile, Property, PropertyImage, UserRole } from "./types";
 
 type ViewName = "overview" | "listings" | "inbox";
@@ -525,7 +526,7 @@ function ListingCard({ listing, onEdit, onDelete, onStatus }: {
       <h3>{listing.title}</h3>
       <div className="property-location"><MapPin size={14} /> {listing.location}</div>
       <div className="property-features"><span><BedDouble size={15} />{listing.bedrooms} {listing.bedrooms === 1 ? "bedroom" : "bedrooms"}</span><span><DoorOpen size={15} />{listing.available_rooms} available</span></div>
-      <div className="property-card-bottom"><div><b>{formatCurrency(listing.monthly_rent)}</b><span> / month</span></div><div className="property-actions"><button title="Edit listing" onClick={onEdit}>Edit</button>{listing.status === "active" ? <><button title="Mark as rented" onClick={() => onStatus("rented")}><Check size={15} /></button><button title="Move to draft" onClick={() => onStatus("draft")}><EyeOff size={15} /></button></> : listing.status === "rented" ? <button title="Mark active" onClick={() => onStatus("active")}><Eye size={15} /></button> : <button title="Publish listing" onClick={() => onStatus("active")}><Eye size={15} /></button>}<button title="Delete listing" className="delete-action" onClick={onDelete}><X size={15} /></button></div></div>
+      <div className="property-card-bottom"><div><b>{formatCurrency(listing.monthly_rent)}</b><span> / month</span></div><div className="property-actions">{listing.status === "active" && isPropertyId(listing.id) && <a className="public-listing-link" href={publicListingUrl(listing.id, window.location.origin)} target="_blank" rel="noreferrer" aria-label={`Open public listing for ${listing.title}`}>View <ArrowUpRight size={13} /></a>}<button title="Edit listing" onClick={onEdit}>Edit</button>{listing.status === "active" ? <><button title="Mark as rented" onClick={() => onStatus("rented")}><Check size={15} /></button><button title="Move to draft" onClick={() => onStatus("draft")}><EyeOff size={15} /></button></> : listing.status === "rented" ? <button title="Mark active" onClick={() => onStatus("active")}><Eye size={15} /></button> : <button title="Publish listing" onClick={() => onStatus("active")}><Eye size={15} /></button>}<button title="Delete listing" className="delete-action" onClick={onDelete}><X size={15} /></button></div></div>
     </div>
   </article>;
 }
