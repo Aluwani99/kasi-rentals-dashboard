@@ -18,6 +18,17 @@ The interface opens in a sample-data demo when Supabase environment variables ar
 4. Apply `supabase/migrations/202611050001_initial_schema.sql` in the Supabase SQL Editor (or with the Supabase CLI).
 5. Run `npm run dev`.
 
+## Deploy to GitHub Pages
+
+The workflow in `.github/workflows/deploy-pages.yml` builds and deploys the dashboard whenever changes reach `main`, or when manually started from the Actions tab. Merge this branch into `main` to publish the first version. In the repository's **Settings → Pages**, set the source to **GitHub Actions** if it is not already selected.
+
+To connect the deployed dashboard to Supabase, add these repository Actions variables under **Settings → Secrets and variables → Actions → Variables**:
+
+- `VITE_SUPABASE_URL`: the Supabase project URL
+- `VITE_SUPABASE_ANON_KEY`: the Supabase anon/publishable key (this is public client configuration; never use the service-role key)
+
+The build still deploys in demo mode if these variables are not configured. Add the GitHub Pages site URL to Supabase Auth's allowed redirect URLs after the first deployment. The site URL is `https://<owner>.github.io/<repository>/`.
+
 Never put a Supabase `service_role` key in a `VITE_` variable or browser code. The WhatsApp bot must use a server-side secret for writes to conversations and messages; the dashboard only receives authenticated read access to those tables. Configure the bot with the same project URL and server-only credentials. Active properties can be read without authentication so the bot can look up listings.
 
 ## Authentication and roles
