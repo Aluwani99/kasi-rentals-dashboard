@@ -2,7 +2,7 @@ name: Deploy dashboard to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    branches: [main, aluwani99-rental-listing-dashboard]
     paths:
       - ".github/workflows/deploy-pages.yml"
       - "src/**"
