@@ -46,3 +46,14 @@ export interface Message {
   media_url: string | null;
   created_at: string;
 }
+
+export interface AppNotification {
+  id: string;
+  user_id: string;
+  type: "whatsapp_inbound";
+  title: string;
+  body: string;
+  related_message_id: string | null;
+  read_at: string | null;
+  created_at: string;
+}

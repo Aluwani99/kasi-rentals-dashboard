@@ -7,8 +7,10 @@ import {
 } from "lucide-react";
 import { isSupabaseConfigured, supabase } from "./lib/supabase";
 import { listingPhotoPath, validateListing, type ListingDraft } from "./lib/listings";
+import { countUnreadNotifications } from "./lib/notifications";
+import { isSixDigitEmailOtp } from "./lib/emailOtp";
 import { isPropertyId, publicListingUrl } from "./lib/publicListing";
-import type { Conversation, Message, Profile, Property, PropertyImage, UserRole } from "./types";
+import type { AppNotification, Conversation, Message, Profile, Property, PropertyImage, UserRole } from "./types";
 
 type ViewName = "overview" | "listings" | "inbox";
 type ListingWithImages = Property;
@@ -93,6 +95,7 @@ function App() {
   const [listings, setListings] = useState<ListingWithImages[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -104,20 +107,23 @@ function App() {
   const [editing, setEditing] = useState<ListingWithImages | null>(null);
   const [demoMode, setDemoMode] = useState(!isSupabaseConfigured);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [notificationOpen, setNotificationOpen] = useState(false);
 
   const refresh = useCallback(async () => {
     if (!supabase || !session) return;
     setLoading(true);
     setError("");
-    const [profileResult, propertiesResult, conversationsResult] = await Promise.all([
+    const [profileResult, propertiesResult, conversationsResult, notificationsResult] = await Promise.all([
       supabase.from("profiles").select("id,role,display_name").eq("id", session.user.id).maybeSingle(),
       supabase.from("properties").select("*,property_images(*)").order("created_at", { ascending: false }),
       supabase.from("conversations").select("*").order("last_message_at", { ascending: false }),
+      supabase.from("notifications").select("*").order("created_at", { ascending: false }).limit(20),
     ]);
-    const resultError = profileResult.error || propertiesResult.error || conversationsResult.error;
+    const resultError = profileResult.error || propertiesResult.error || conversationsResult.error || notificationsResult.error;
     if (resultError) setError(resultError.message);
     if (profileResult.data) setProfile(profileResult.data as Profile);
     if (propertiesResult.data) setListings(propertiesResult.data as ListingWithImages[]);
+    if (notificationsResult.data) setNotifications(notificationsResult.data as AppNotification[]);
     if (conversationsResult.data) {
       const chats = conversationsResult.data as Conversation[];
       setConversations(chats);
@@ -148,7 +154,10 @@ function App() {
     });
     const { data: listener } = supabase.auth.onAuthStateChange((_event, currentSession) => {
       setSession(currentSession ? { user: { id: currentSession.user.id, email: currentSession.user.email } } : null);
-      if (!currentSession) setProfile(null);
+      if (!currentSession) {
+        setProfile(null);
+        setNotifications([]);
+      }
     });
     return () => {
       active = false;
@@ -176,6 +185,11 @@ function App() {
       setConversations(currentChats);
       setSelectedConversation((current) => current && currentChats.some((chat) => chat.id === current)
         ? current : currentChats[0]?.id ?? null);
+      const { data: latestNotifications, error: notificationError } = await client.from("notifications")
+        .select("*").order("created_at", { ascending: false }).limit(20);
+      if (!active) return;
+      if (notificationError) setError(notificationError.message);
+      else setNotifications((latestNotifications || []) as AppNotification[]);
       if (!currentChats.length) {
         setMessages([]);
         return;
@@ -196,6 +210,7 @@ function App() {
   const visibleListings = isDemo ? sampleListings : listings;
   const visibleConversations = isDemo ? sampleConversations : conversations;
   const visibleMessages = isDemo ? sampleMessages : messages;
+  const unreadNotifications = countUnreadNotifications(notifications);
   const activeChat = visibleConversations.find((chat) => chat.id === selectedConversation) || visibleConversations[0] || null;
   const chatMessages = activeChat ? visibleMessages.filter((message) => message.conversation_id === activeChat.id) : [];
   const filteredListings = useMemo(() => visibleListings.filter((item) =>
@@ -340,6 +355,18 @@ function App() {
     await refresh();
   }
 
+  async function markNotificationRead(notification: AppNotification) {
+    if (!supabase || notification.read_at) return;
+    const readAt = new Date().toISOString();
+    const { error: updateError } = await supabase.from("notifications")
+      .update({ read_at: readAt }).eq("id", notification.id).is("read_at", null);
+    if (updateError) {
+      setError(updateError.message);
+      return;
+    }
+    setNotifications((current) => current.map((item) => item.id === notification.id ? { ...item, read_at: readAt } : item));
+  }
+
   if (authLoading) return <div className="loading-screen"><span className="brand-mark"><Home size={21} /></span><span>Opening your workspace…</span></div>;
 
   if (!isDemo && !session) {
@@ -391,7 +418,20 @@ function App() {
           <div className="breadcrumbs"><span>Workspace</span><ChevronRight size={14} /><b>{view === "overview" ? "Overview" : view === "listings" ? "My listings" : "WhatsApp inbox"}</b></div>
           <div className="topbar-actions">
             {isDemo && <span className="demo-pill"><span /> DEMO DATA</span>}
-            <button className="icon-btn notification-btn" aria-label="Notifications" onClick={() => showNotice("You’re all caught up.")}><Bell size={18} /><i /></button>
+            <div className="notification-popover-wrap">
+              <button className="icon-btn notification-btn" aria-label="Notifications" aria-expanded={notificationOpen} onClick={() => setNotificationOpen((open) => !open)}>
+                <Bell size={18} />{unreadNotifications > 0 && <i />}
+              </button>
+              {notificationOpen && <section className="notification-popover" aria-label="Recent notifications">
+                <div className="notification-popover-heading"><b>Notifications</b><span>{unreadNotifications ? `${unreadNotifications} unread` : "All caught up"}</span></div>
+                {notifications.length ? <ul>
+                  {notifications.map((notification) => <li className={notification.read_at ? "" : "unread"} key={notification.id}>
+                    <div><b>{notification.title}</b><p>{notification.body}</p><small>{timeAgo(notification.created_at)}</small></div>
+                    {!notification.read_at && <button type="button" onClick={() => void markNotificationRead(notification)}>Mark as read</button>}
+                  </li>)}
+                </ul> : <p className="notifications-empty">No notifications yet.</p>}
+              </section>}
+            </div>
             <div className="topbar-avatar">{initials(appProfile.display_name)}</div>
           </div>
         </header>
@@ -620,32 +660,94 @@ function AuthScreen({ onDemo }: { onDemo: () => void }) {
   const [role, setRole] = useState<UserRole>("agent");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [pendingEmail, setPendingEmail] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!supabase) return;
     setBusy(true); setError("");
     const values = new FormData(event.currentTarget);
-    const email = String(values.get("email"));
+    const email = String(values.get("email")).trim().toLowerCase();
     const password = String(values.get("password"));
-    const result = mode === "signin"
-      ? await supabase.auth.signInWithPassword({ email, password })
-      : await supabase.auth.signUp({ email, password, options: { data: { display_name: values.get("name"), role } } });
-    if (result.error) setError(result.error.message);
-    else if (mode === "signup" && !result.data.session) setError("Check your email to confirm your account, then sign in.");
-    setBusy(false);
+    try {
+      const result = mode === "signin"
+        ? await supabase.auth.signInWithPassword({ email, password })
+        : await supabase.auth.signUp({ email, password, options: { data: { display_name: values.get("name"), role } } });
+      if (result.error) setError(result.error.message);
+      else if (mode === "signup" && !result.data.session) {
+        setPendingEmail(email);
+        setMessage("Enter the verification code we sent to your email.");
+      }
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "Unable to complete sign in.");
+    } finally {
+      setBusy(false);
+    }
   }
+
+  async function verifyEmail(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!supabase || !pendingEmail) return;
+    const values = new FormData(event.currentTarget);
+    const token = String(values.get("token")).trim();
+    if (!isSixDigitEmailOtp(token)) {
+      setError("Enter the 6-digit code from your email.");
+      return;
+    }
+    setBusy(true); setError(""); setMessage("");
+    try {
+      const { error: verifyError } = await supabase.auth.verifyOtp({ email: pendingEmail, token, type: "email" });
+      if (verifyError) setError(verifyError.message);
+    } catch (verifyError) {
+      setError(verifyError instanceof Error ? verifyError.message : "Unable to verify your email.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function resendCode() {
+    if (!supabase || !pendingEmail) return;
+    setBusy(true); setError(""); setMessage("");
+    try {
+      const { error: resendError } = await supabase.auth.resend({ type: "signup", email: pendingEmail });
+      if (resendError) setError(resendError.message);
+      else setMessage("A new verification code has been sent.");
+    } catch (resendError) {
+      setError(resendError instanceof Error ? resendError.message : "Unable to resend the verification code.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function changeEmail() {
+    setPendingEmail("");
+    setError("");
+    setMessage("");
+    setMode("signup");
+  }
+
   return <div className="auth-page">
     <aside className="auth-aside"><div className="brand-lockup auth-brand"><div className="brand-mark"><Home size={19} strokeWidth={2.5} /></div><div><strong>kasi<span>rentals</span></strong><small>PROPERTY DESK</small></div></div><div className="auth-art"><span>MADE FOR THE WAY WE LIVE</span><h2>Good homes.<br /><em>Good people.</em></h2><p>A little more heart in the rental process. A lot less admin on your plate.</p><div className="auth-illustration"><div className="auth-sun" /><div className="auth-house"><div /><span /></div><div className="auth-hill" /></div></div><small className="auth-copyright">© 2026 Kasi Rentals · Made for our communities</small></aside>
-    <main className="auth-main"><div className="auth-form-wrap"><div className="eyebrow">WELCOME TO YOUR RENTAL HQ</div><h1>{mode === "signin" ? "Good to have you back." : "Let’s get you set up."}</h1><p>{mode === "signin" ? "Sign in to pick up right where you left off." : "Create your account and start sharing your listings."}</p>
-      <div className="auth-tabs"><button className={mode === "signin" ? "selected" : ""} onClick={() => setMode("signin")}>Sign in</button><button className={mode === "signup" ? "selected" : ""} onClick={() => setMode("signup")}>Create account</button></div>
-      <form onSubmit={submit} className="auth-form">
+    <main className="auth-main"><div className="auth-form-wrap"><div className="eyebrow">WELCOME TO YOUR RENTAL HQ</div><h1>{pendingEmail ? "Check your email." : mode === "signin" ? "Good to have you back." : "Let’s get you set up."}</h1><p>{pendingEmail ? <>We sent a verification code to <b>{pendingEmail}</b>.</> : mode === "signin" ? "Sign in to pick up right where you left off." : "Create your account and start sharing your listings."}</p>
+      {!pendingEmail && <div className="auth-tabs"><button className={mode === "signin" ? "selected" : ""} onClick={() => { setMode("signin"); setError(""); setMessage(""); }}>Sign in</button><button className={mode === "signup" ? "selected" : ""} onClick={() => { setMode("signup"); setError(""); setMessage(""); }}>Create account</button></div>}
+      {pendingEmail ? <form onSubmit={verifyEmail} className="auth-form">
+        <label className="field"><span>Email verification code</span><input name="token" type="text" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} placeholder="6-digit code" aria-describedby="otp-help" required /></label>
+        <small id="otp-help" className="otp-help">Enter the 6-digit code from your email. The code is verified by Supabase Auth and is not stored in the dashboard.</small>
+        {error && <div className="auth-error" role="alert"><CircleHelp size={15} />{error}</div>}
+        {message && <div className="auth-message" role="status">{message}</div>}
+        <button className="btn btn-primary auth-submit" disabled={busy}>{busy ? "Verifying…" : <>Verify email <ArrowRight size={16} /></>}</button>
+        <button className="auth-secondary-action" type="button" onClick={() => void resendCode()} disabled={busy}>{busy ? "Please wait…" : "Resend verification code"}</button>
+        <button className="auth-secondary-action" type="button" onClick={changeEmail} disabled={busy}>Use a different email</button>
+      </form> : <form onSubmit={submit} className="auth-form">
         {mode === "signup" && <><label className="field"><span>Your name</span><input name="name" placeholder="e.g. Thandi Mokoena" required /></label><div className="role-picker"><span>I’m joining as a...</span><div><button type="button" className={role === "agent" ? "selected" : ""} onClick={() => setRole("agent")}><Users size={15} /> Rental agent</button><button type="button" className={role === "owner" ? "selected" : ""} onClick={() => setRole("owner")}><Home size={15} /> Property owner</button></div></div></>}
         <label className="field"><span>Email address</span><input name="email" type="email" placeholder="you@example.com" autoComplete="email" required /></label>
         <label className="field"><span>Password</span><span className="input-with-icon password-input"><input name="password" type={showPassword ? "text" : "password"} placeholder="At least 8 characters" minLength={8} autoComplete={mode === "signin" ? "current-password" : "new-password"} required /><button type="button" className="icon-btn" aria-label={showPassword ? "Hide password" : "Show password"} onClick={() => setShowPassword(!showPassword)}>{showPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button></span></label>
-        {error && <div className="auth-error"><CircleHelp size={15} />{error}</div>}
+        {error && <div className="auth-error" role="alert"><CircleHelp size={15} />{error}</div>}
+        {message && <div className="auth-message" role="status">{message}</div>}
         <button className="btn btn-primary auth-submit" disabled={busy}>{busy ? "One moment…" : <>{mode === "signin" ? "Sign in to your workspace" : "Create my account"} <ArrowRight size={16} /></>}</button>
-      </form>
+      </form>}
       <div className="auth-secure"><ShieldCheck size={14} /> Your details stay safe and secure.</div>
       <button className="demo-link" onClick={onDemo}>Just looking around? Explore the demo <ArrowRight size={14} /></button>
     </div></main>
