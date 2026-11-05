@@ -4,7 +4,7 @@ import {
   ChevronDown, ChevronRight, CircleHelp, DoorOpen, Eye, EyeOff, ExternalLink,
   Filter, Home, ImagePlus, LogOut, Mail, MapPin, Menu, MessageCircle,
   MoreHorizontal, Plus, Search, Settings2, ShieldCheck, SlidersHorizontal,
-  Sparkles, Upload, Users, X,
+  Sparkles, Upload, UserRound, Users, X,
 } from "lucide-react";
 import { isSupabaseConfigured, supabase } from "./lib/supabase";
 import { listingPhotoPath, validateListing, type ListingDraft } from "./lib/listings";
@@ -42,8 +42,6 @@ const sampleListings: ListingWithImages[] = [
 
 const sampleConversations: Conversation[] = [
   { id: "chat-1", phone_number: "+27 72 481 2036", assigned_to: "demo", selected_location: "Tembisa", state: {}, last_message_at: new Date().toISOString() },
-  { id: "chat-2", phone_number: "+27 83 105 7724", assigned_to: null, selected_location: "Mamelodi", state: {}, last_message_at: new Date(Date.now() - 1000 * 60 * 45).toISOString() },
-  { id: "chat-3", phone_number: "+27 61 992 4810", assigned_to: null, selected_location: "Soweto", state: {}, last_message_at: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString() },
 ];
 
 const sampleTeam: Profile[] = [
@@ -52,15 +50,11 @@ const sampleTeam: Profile[] = [
 ];
 
 const sampleNotifications: DashboardNotification[] = [
-  { id: "note-1", user_id: "demo", conversation_id: "chat-1", message_id: "message-3", title: "New WhatsApp enquiry", body: "+27 72 481 2036: That sounds perfect, please send the photos 🙏", created_at: new Date(Date.now() - 1000 * 60 * 4).toISOString(), read_at: null },
+  { id: "note-1", user_id: "demo", conversation_id: "chat-1", message_id: "message-1", title: "New WhatsApp enquiry assigned to you", body: "+27 72 481 2036: Hi Thandi, I need a room in Tembisa. My budget is R2,000 a month. Do you have anything available?", created_at: new Date(Date.now() - 1000 * 60 * 4).toISOString(), read_at: null },
 ];
 
 const sampleMessages: Message[] = [
-  { id: "message-1", conversation_id: "chat-1", direction: "inbound", body: "Hi, do you have any rooms available in Tembisa for under R2,000?", provider_message_id: null, media_url: null, created_at: new Date(Date.now() - 1000 * 60 * 18).toISOString() },
-  { id: "message-2", conversation_id: "chat-1", direction: "outbound", body: "Sawubona! Yes, we have 2 rooms available from R1,800/month. Would you like to see photos?", provider_message_id: null, media_url: null, created_at: new Date(Date.now() - 1000 * 60 * 17).toISOString() },
-  { id: "message-3", conversation_id: "chat-1", direction: "inbound", body: "That sounds perfect, please send the photos 🙏", provider_message_id: null, media_url: null, created_at: new Date(Date.now() - 1000 * 60 * 5).toISOString() },
-  { id: "message-4", conversation_id: "chat-2", direction: "inbound", body: "Looking for a family house around Mamelodi, 3 bedrooms.", provider_message_id: null, media_url: null, created_at: new Date(Date.now() - 1000 * 60 * 45).toISOString() },
-  { id: "message-5", conversation_id: "chat-3", direction: "inbound", body: "How much is the private room?", provider_message_id: null, media_url: null, created_at: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString() },
+  { id: "message-1", conversation_id: "chat-1", direction: "inbound", body: "Hi Thandi, I need a room in Tembisa. My budget is R2,000 a month. Do you have anything available?", provider_message_id: null, media_url: null, created_at: new Date(Date.now() - 1000 * 60 * 4).toISOString() },
 ];
 
 function initials(name?: string | null) {
@@ -233,8 +227,7 @@ function App() {
   const visibleMessages = isDemo ? sampleMessages : messages;
   const visibleTeam = isDemo ? sampleTeam : team;
   const visibleNotifications = isDemo ? demoAlerts : notifications;
-  const activeChat = visibleConversations.find((chat) => chat.id === selectedConversation) || visibleConversations[0] || null;
-  const chatMessages = activeChat ? visibleMessages.filter((message) => message.conversation_id === activeChat.id) : [];
+  const inboxAgentId = session?.user.id || "demo";
   const filteredListings = useMemo(() => visibleListings.filter((item) =>
     `${item.title} ${item.location} ${item.property_type}`.toLowerCase().includes(search.toLowerCase()) &&
     (statusFilter === "all" || item.status === statusFilter),
@@ -529,7 +522,7 @@ function App() {
         {(error || notice) && <div className={`feedback-banner ${error ? "error" : "success"}`} role="status">{error ? <CircleHelp size={17} /> : <Check size={17} />}{error || notice}{error && <button className="icon-btn" onClick={() => setError("")}><X size={16} /></button>}</div>}
         {view === "overview" && <Overview listings={visibleListings} conversations={visibleConversations} messages={visibleMessages} onNewListing={newListing} onListings={() => setView("listings")} onInbox={() => setView("inbox")} />}
         {view === "listings" && <ListingsView listings={filteredListings} search={search} setSearch={setSearch} statusFilter={statusFilter} setStatusFilter={setStatusFilter} onCreate={newListing} onEdit={(item) => { setEditing(item); setEditorOpen(true); }} onDelete={deleteListing} onStatus={updateStatus} loading={loading} />}
-        {view === "inbox" && <InboxView conversations={visibleConversations} messages={visibleMessages} activeChat={activeChat} chatMessages={chatMessages} selected={selectedConversation} onSelect={setSelectedConversation} agents={visibleTeam.filter((member) => member.role === "agent")} onAssign={assignConversation} />}
+        {view === "inbox" && <InboxView conversations={visibleConversations} messages={visibleMessages} selected={selectedConversation} onSelect={setSelectedConversation} agents={visibleTeam.filter((member) => member.role === "agent")} currentAgentId={inboxAgentId} canViewAll={appProfile.role === "owner"} demo={isDemo} onAssign={assignConversation} />}
         {view === "team" && <TeamView team={visibleTeam} currentUserId={session?.user.id || "demo"} onInvite={() => setInviteOpen(true)} />}
         {view === "settings" && <SettingsView profile={appProfile} email={session?.user.email || "Demo workspace"} onSave={saveProfile} onNotificationChange={setDesktopNotifications} />}
         {view === "support" && <SupportView onInbox={() => setView("inbox")} />}
@@ -666,33 +659,62 @@ function ListingCard({ listing, onEdit, onDelete, onStatus }: {
   </article>;
 }
 
-function InboxView({ conversations, messages, activeChat, chatMessages, selected, onSelect, agents, onAssign }: {
-  conversations: Conversation[]; messages: Message[]; activeChat: Conversation | null;
-  chatMessages: Message[]; selected: string | null; onSelect: (id: string) => void;
-  agents: Profile[]; onAssign: (conversationId: string, agentId: string) => void;
+function InboxView({ conversations, messages, selected, onSelect, agents, currentAgentId, canViewAll, demo, onAssign }: {
+  conversations: Conversation[]; messages: Message[];
+  selected: string | null; onSelect: (id: string | null) => void;
+  agents: Profile[]; currentAgentId: string; canViewAll: boolean; demo: boolean;
+  onAssign: (conversationId: string, agentId: string) => void;
 }) {
   const [filter, setFilter] = useState("");
-  const filteredChats = conversations.filter((chat) => chat.phone_number.includes(filter) || (chat.selected_location || "").toLowerCase().includes(filter.toLowerCase()));
+  const [scope, setScope] = useState<"mine" | "unassigned" | "all">(canViewAll ? "all" : "mine");
+  const mineCount = conversations.filter((chat) => chat.assigned_to === currentAgentId).length;
+  const unassignedCount = conversations.filter((chat) => !chat.assigned_to).length;
+  const scopedConversations = conversations.filter((chat) => {
+    if (canViewAll && scope === "all") return true;
+    return scope === "unassigned" ? !chat.assigned_to : chat.assigned_to === currentAgentId;
+  });
+  const filteredChats = scopedConversations.filter((chat) =>
+    chat.phone_number.includes(filter) ||
+    (chat.selected_location || "").toLowerCase().includes(filter.toLowerCase()) ||
+    (messages.find((message) => message.conversation_id === chat.id)?.body || "").toLowerCase().includes(filter.toLowerCase()),
+  );
+  const activeChat = filteredChats.find((chat) => chat.id === selected) || filteredChats[0] || null;
+  const chatMessages = activeChat ? messages.filter((message) => message.conversation_id === activeChat.id) : [];
+  const assignedAgent = activeChat && agents.find((agent) => agent.id === activeChat.assigned_to);
+  useEffect(() => {
+    if (activeChat && selected !== activeChat.id) onSelect(activeChat.id);
+    if (!activeChat && selected) onSelect(null);
+  }, [activeChat?.id, onSelect, selected]);
   return <div className="page-wrap inbox-page">
-    <div className="page-heading-row inbox-heading"><div><div className="eyebrow">TENANT CONVERSATIONS</div><h1>WhatsApp inbox</h1><p>See what people are looking for and how the assistant replied.</p></div><span className="inbox-live-label"><i /> UPDATES EVERY 15 SEC</span></div>
+    <div className="page-heading-row inbox-heading"><div><div className="eyebrow">TENANT CONVERSATIONS</div><h1>WhatsApp inbox</h1><p>{canViewAll ? "Review incoming requests and see who is following up." : "Only requests assigned to you appear in this inbox."}</p></div><span className="inbox-live-label"><i /> UPDATES EVERY 15 SEC</span></div>
+    {demo && <div className="test-request-banner"><span className="test-request-icon"><MessageCircle size={17} /></span><span><b>Test request · assigned to Thandi</b><small>“I need a room in Tembisa” — try the WhatsApp handoff to continue with the renter.</small></span><span className="test-label">DEMO</span></div>}
     <div className="inbox-layout content-card">
       <section className="chat-list-panel">
-        <div className="chat-list-heading"><div><h3>Conversations <span>{conversations.length}</span></h3><small>Sorted by most recent</small></div><button className="icon-btn" aria-label="Conversation filters"><Filter size={17} /></button></div>
+        <div className="chat-list-heading"><div><h3>Requests <span>{filteredChats.length}</span></h3><small>{scope === "unassigned" ? "Waiting for an agent" : scope === "all" ? "All team requests" : "Assigned to you"}</small></div><button className="icon-btn" aria-label="Conversation filters"><Filter size={17} /></button></div>
+        <div className="inbox-scopes">
+          <button className={scope === "mine" ? "selected" : ""} onClick={() => setScope("mine")}>My requests <span>{mineCount}</span></button>
+          <button className={scope === "unassigned" ? "selected" : ""} onClick={() => setScope("unassigned")}>Unassigned <span>{unassignedCount}</span></button>
+          {canViewAll && <button className={scope === "all" ? "selected" : ""} onClick={() => setScope("all")}>All</button>}
+        </div>
         <div className="chat-search"><Search size={15} /><input placeholder="Search chats..." value={filter} onChange={(event) => setFilter(event.target.value)} /></div>
         <div className="chat-list">
           {filteredChats.map((chat, index) => {
             const latest = messages.filter((message) => message.conversation_id === chat.id).at(-1);
             return <button key={chat.id} className={`chat-list-item ${(selected || activeChat?.id) === chat.id ? "selected" : ""}`} onClick={() => onSelect(chat.id)}>
               <div className={`chat-avatar chat-avatar-${index % 3}`}>{initials(chat.phone_number.replace(/\D/g, "").slice(-4))}</div>
-              <div className="chat-list-copy"><div><b>{chat.phone_number}</b><time>{timeAgo(chat.last_message_at)}</time></div><p>{latest?.body || "Conversation started"}</p><span className="location-chip"><MapPin size={10} />{chat.selected_location || "Location not set"}</span></div>
+              <div className="chat-list-copy"><div><b>{chat.phone_number}</b><time>{timeAgo(chat.last_message_at)}</time></div><p>{latest?.body || "Conversation started"}</p><span className="location-chip"><MapPin size={10} />{chat.selected_location || "Location not set"}</span>{chat.assigned_to && <span className="assigned-chip"><UserRound size={10} />{chat.assigned_to === currentAgentId ? "Assigned to you" : agents.find((agent) => agent.id === chat.assigned_to)?.display_name || "Assigned"}</span>}</div>
             </button>;
           })}
-          {!filteredChats.length && <div className="chat-empty">No conversations yet.</div>}
+          {!filteredChats.length && <div className="chat-empty">{filter ? "No requests match that search." : scope === "unassigned" ? "No new requests are waiting for an agent." : "No requests are assigned to you yet."}</div>}
         </div>
       </section>
       <section className="chat-detail">
         {activeChat ? <>
-          <div className="chat-detail-head"><div className="chat-avatar chat-avatar-0">{initials(activeChat.phone_number.replace(/\D/g, "").slice(-4))}</div><div className="detail-person"><b>{activeChat.phone_number}</b><span><i /> WhatsApp · {activeChat.selected_location || "Location not set"}</span></div><label className="assign-control"><Users size={14} /><select aria-label="Assign conversation to an agent" value={activeChat.assigned_to || ""} onChange={(event) => onAssign(activeChat.id, event.target.value)}><option value="">Unassigned</option>{agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.display_name || "Agent"}</option>)}</select><ChevronDown size={12} /></label><button className="btn btn-outline" onClick={() => window.open(`https://wa.me/${activeChat.phone_number.replace(/\D/g, "")}`, "_blank", "noopener,noreferrer")}><MessageCircle size={15} /> Open WhatsApp</button></div>
+          <div className="chat-detail-head"><div className="chat-avatar chat-avatar-0">{initials(activeChat.phone_number.replace(/\D/g, "").slice(-4))}</div><div className="detail-person"><b>{activeChat.phone_number}</b><span><i /> WhatsApp · {activeChat.selected_location || "Location not set"}</span></div><label className="assign-control"><Users size={14} /><select aria-label="Assign conversation to an agent" value={activeChat.assigned_to || ""} onChange={(event) => onAssign(activeChat.id, event.target.value)}><option value="">Unassigned</option>{agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.display_name || "Agent"}</option>)}</select><ChevronDown size={12} /></label><button className="btn btn-outline" onClick={() => {
+            const text = encodeURIComponent("Sawubona, I’m following up on your rental enquiry. How can I help?");
+            window.open(`https://wa.me/${activeChat.phone_number.replace(/\D/g, "")}?text=${text}`, "_blank", "noopener,noreferrer");
+          }}><MessageCircle size={15} /> Continue in WhatsApp</button></div>
+          <div className="active-assignment"><span className="assignment-avatar"><UserRound size={13} /></span><span>{assignedAgent ? <>Following up with <b>{assignedAgent.display_name}</b></> : "This request is not assigned yet"}</span>{!activeChat.assigned_to && <button onClick={() => onAssign(activeChat.id, currentAgentId)}>Assign to me <ArrowRight size={12} /></button>}</div>
           <div className="chat-date-line"><span />Today<span /></div>
           <div className="message-stream">
             {chatMessages.map((message) => <div key={message.id} className={`message-row ${message.direction}`}>
@@ -702,8 +724,8 @@ function InboxView({ conversations, messages, activeChat, chatMessages, selected
             </div>)}
             {!chatMessages.length && <div className="chat-empty">Messages for this conversation will appear here.</div>}
           </div>
-          <div className="chat-readonly-note"><ShieldCheck size={15} /><span>The assistant is handling replies. This view is for monitoring conversations.</span></div>
-        </> : <div className="no-chat-selected"><MessageCircle size={24} /><b>Select a conversation</b><p>Choose a chat to view its messages.</p></div>}
+          <div className="chat-readonly-note"><ShieldCheck size={15} /><span>Continue this conversation in WhatsApp. Replies synced by the WhatsApp service will appear here.</span></div>
+        </> : <div className="no-chat-selected"><MessageCircle size={24} /><b>{scope === "unassigned" ? "No requests waiting" : "Your inbox is clear"}</b><p>{scope === "unassigned" ? "New WhatsApp enquiries will show up here." : "Requests assigned to you will appear here. Check Unassigned to claim a request."}</p></div>}
       </section>
     </div>
     <div className="inbox-footnote"><ArrowDownLeft size={14} /> {messages.filter((message) => message.direction === "inbound").length} incoming messages <span>·</span> <ArrowUpRight size={14} /> {messages.filter((message) => message.direction === "outbound").length} assistant replies</div>
